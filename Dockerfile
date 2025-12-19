@@ -47,5 +47,6 @@ RUN chown -R www-data:www-data /var/www/html && \
 ENV PORT=8080
 EXPOSE 8080
 
-# Start script will launch php-fpm and nginx
+
+# ...
 CMD ["/start.sh"]

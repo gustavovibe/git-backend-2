@@ -1,18 +1,21 @@
 #!/bin/sh
 set -e
 
-# allow overriding PORT via env; default is 8080
+# default PORT if Cloud Run doesn't set it
 : "${PORT:=8080}"
 
-# ensure permissions (best-effort)
+# best-effort: ensure web user owns app files
 chown -R www-data:www-data /var/www/html || true
 
-# substitute PORT into nginx config and write final config
+# substitute PORT into nginx config (only $PORT substitution)
 envsubst '$PORT' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf
 
-# start php-fpm in foreground? Use -F or --nodaemonize depending on php-fpm version
-# php-fpm -F will run in foreground if supported; otherwise run in background then keep nginx foreground.
+# optional: warm caches (uncomment if you want)
+# php /var/www/html/artisan config:cache || true
+# php /var/www/html/artisan route:cache || true
+
+# start php-fpm (nodaemonize / foreground for -F)
 php-fpm -F &
 
-# start nginx in foreground (PID 1) so Cloud Run sees the HTTP server
+# run nginx in foreground so PID 1 is nginx (keeps container alive)
 nginx -g 'daemon off;'

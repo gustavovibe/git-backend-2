@@ -1,4 +1,4 @@
-user  nginx;
+user  www-data;
 worker_processes  auto;
 error_log  /var/log/nginx/error.log warn;
 pid        /var/run/nginx.pid;
@@ -14,13 +14,13 @@ http {
     keepalive_timeout  65;
 
     server {
-        listen ${PORT:-8080} default_server;
+        listen ${PORT} default_server;
         server_name _;
 
         root /var/www/html/public;
         index index.php index.html;
 
-        # Laravel-friendly front controller
+        # Laravel front controller
         location / {
             try_files $uri $uri/ /index.php?$query_string;
         }
