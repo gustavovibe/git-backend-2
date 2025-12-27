@@ -1,4 +1,11 @@
 <?php
+use App\Services\CloudSQL\DatabaseUnix;
+
+Route::get('/test-sql', function () {
+    $pdo = DatabaseUnix::initUnixDatabaseConnection();
+    $stmt = $pdo->query('SELECT NOW()');
+    return $stmt->fetchColumn();
+});
 
 use App\Http\Controllers\ActionLogController;
 use App\Http\Controllers\AuthController;
