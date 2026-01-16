@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\TourRadarController;
 use App\Http\Controllers\newPackageController;
@@ -11,6 +10,7 @@ use App\Http\Controllers\DuffelApiController;
 use App\Http\Controllers\StripeController;
 use App\Http\Controllers\TourController;
 use App\Models\Order;
+use App\Models\Attempt;
 
 class HoldProcessPendingAttempts extends Command
 {
@@ -29,7 +29,7 @@ class HoldProcessPendingAttempts extends Command
 
     public function processPendingAttempts()
     {
-        $pendingAttempts = DB::table('attempts')
+        $pendingAttempts = Attempt::query()
             ->where('status', 'pending')
             ->where('expiration', '>=', now())
             ->get();
@@ -101,33 +101,26 @@ class HoldProcessPendingAttempts extends Command
 
                         if ($stripeFee !== null) {
                             // Process the fee if it exists
-                            return response()->json([
-                                'message' => 'Stripe fee retrieved successfully.',
-                                'stripe_fee' => $stripeFee,
-                            ]);
-                            DB::table('orders')->where('booking_id', $attempt->booking_id)->update(['stripe_fee' => $stripeFee]);
-                        } else {
-                            // Handle cases where the fee is not available
-                            return response()->json([
-                                'message' => 'Stripe fee not found in the response.',
-                            ], 404);
+                            Order::where('booking_id', $attempt->booking_id)->update(['stripe_fee' => $stripeFee]);
                         }
-                        DB::table('attempts')->where('id', $attempt->id)->update(['status' => 'confirmed']);
-                        $mailResponse = TourController::emailBConfirmation($bookingId, $duffelId, $paymentId, $RequestPassengers);                   
+                        Attempt::where('id', $attempt->id)->update(['status' => 'confirmed']);
+                        $mailResponse = TourController::emailBConfirmation($bookingId, $duffelId, $paymentIntent, $RequestPassengers);                   
                         Log::info('automatic mail sent ' . $mailResponse . ' confirmed.');
                 } 
             }                 
             else {
-                Log::warning('tourradar booking has not been confirmed ' . $$attempt->booking_id);
+                Log::warning('tourradar booking has not been confirmed ' . $attempt->booking_id);
             }
         }
 
-        $expiredAttempts = DB::table('attempts')
+        $expiredAttempts = Attempt::query()
             ->where('status', 'pending')
             ->where('expiration', '<', now())
             ->get();
 
         foreach ($expiredAttempts as $attempt) {
+            $paymentIntent = $attempt->payment_id;
+            $bookingId = $attempt->booking_id;
             Log::info('automatic Processing expired attempt ID: ' . $attempt->id . 'expiration: ' . $attempt->expiration);
             if(!$paymentIntent){
                 Log::error('No payment intent found in attempt');
@@ -141,25 +134,27 @@ class HoldProcessPendingAttempts extends Command
                 if ($stripePaymentData['data']['payment_intent']['canceled_at'] == null) {
                     $stripeResponse = StripeController::cancelPayment($paymentIntent);
                     Log::info('automatic Stripe cancel payment for payment ID ' . $paymentIntent . ': ' . json_encode($stripeResponse));
-                    DB::table('attempts')->where('id', $attempt->id)->update(['status' => 'failed']);
+                    Attempt::where('id', $attempt->id)->update(['status' => 'failed']);
                     Log::info('automatic attempt failed (expired): ' . $attempt->id );
                     $mailResponse = TourController::bookingCancellation($bookingId);
-                    DB::table('orders')->where('booking_id', $attempt->id)->update(['booking_status' => 'failed']);
+                    Order::where('booking_id', $attempt->booking_id)->update(['booking_status' => 'failed']);
                     Log::info('automatic mail sent ' . $mailResponse . ' cancelled.');
                 } else {
-                    DB::table('attempts')->where('id', $attempt->id)->update(['status' => 'failed']);
-                    DB::table('orders')->where('booking_id', $attempt->id)->update(['booking_status' => 'failed']);
+                    Attempt::where('id', $attempt->id)->update(['status' => 'failed']);
+                    Order::where('booking_id', $attempt->booking_id)->update(['booking_status' => 'failed']);
                     Log::info('automatic attempt already canceled in stripe: ' . $attempt->id . 'data' . $stripePaymentData['data']['payment_intent']);
                 }
             } catch (\Exception $e) {
                 Log::error('automatic Error cancelling payment ID ' . $paymentIntent . ': ' . $e->getMessage());
             }
         }
-        $failedAttempts = DB::table('attempts')
+        $failedAttempts = Attempt::query()
             ->where('status', 'failed')
             ->get();
 
         foreach ($failedAttempts as $attempt) {
+            $paymentIntent = $attempt->payment_id;
+            $bookingId = $attempt->booking_id;
             Log::info('automatic Processing failed attempt ID: ' . $attempt->id);
             if(!$paymentIntent){
                 Log::error('No payment intent found in attempt');
@@ -175,7 +170,7 @@ class HoldProcessPendingAttempts extends Command
                     Log::info('automatic Stripe cancel payment for payment ID ' . $paymentIntent . ': ' . json_encode($stripeResponse));
                     $mailResponse = TourController::bookingCancellation($bookingId);
                     Log::info('automatic mail sent ' . $mailResponse . ' cancelled.');
-                    DB::table('orders')->where('booking_id', $attempt->id)->update(['booking_status' => 'failed']);
+                    Order::where('booking_id', $attempt->booking_id)->update(['booking_status' => 'failed']);
                     Log::info('automatic attempt failed (expired): ' . $attempt->id );
                 } else {
                     Log::info('automatic attempt already canceled in stripe: ' . $attempt->id . 'data' . $stripePaymentData['data']['payment_intent']);

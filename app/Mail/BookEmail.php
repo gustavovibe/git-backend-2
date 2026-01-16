@@ -21,8 +21,9 @@ class BookEmail extends Mailable
     protected $invoice;
     protected $invoice_content;
     protected $flag;
+		protected $template;
 
-    public function __construct($orders,$data,$summaryValues,$invoice,$invoice_content,$flag)
+    public function __construct($orders,$data,$summaryValues,$invoice,$invoice_content,$flag, $template = 'emails.booking_confirmation_2')
     {
         $this->orders = $orders;
         $this->data = $data;
@@ -30,13 +31,14 @@ class BookEmail extends Mailable
         $this->invoice = $invoice;
         $this->invoice_content = $invoice_content;
         $this->flag = $flag;
+				$this->template = $template;
     }
 
 
     public function build()
     {
         $email = $this->subject('Your booking with Vibe Adventures')
-                      ->view('emails.booking_confirmation_2')
+                      ->view($this->template)
                       ->with([
                           'order' => $this->orders,
                       ]);

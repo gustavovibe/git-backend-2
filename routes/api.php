@@ -1,11 +1,4 @@
 <?php
-use App\Services\CloudSQL\DatabaseUnix;
-
-Route::get('/test-sql', function () {
-    $pdo = DatabaseUnix::initUnixDatabaseConnection();
-    $stmt = $pdo->query('SELECT NOW()');
-    return $stmt->fetchColumn();
-});
 
 use App\Http\Controllers\ActionLogController;
 use App\Http\Controllers\AuthController;
@@ -37,6 +30,7 @@ use App\Http\Controllers\TravelersController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WishlistController;
 use App\Http\Controllers\SystemUserController;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
 use App\Http\Controllers\AirportController;
 use App\Http\Controllers\Controller;
@@ -277,6 +271,15 @@ Route::get('/process', function () {
 
     // Return the log content as plain text
     return response($lines, 200, ['Content-Type' => 'text/plain']);
+});
+
+Route::get('/process-pending-attempts', function () {
+    Artisan::call('process:pending-attempts');
+
+    return response()->json([
+        'message' => 'process:pending-attempts executed',
+        'output' => Artisan::output(),
+    ]);
 });
 
 Route::get('/sync_tours', function () {

@@ -371,7 +371,8 @@ class TourController extends Controller
           Log::info('invoice BookEmail:', $invoice);
           //Log::info('invoice content BookEmail:', $invoice_content);
            Mail::to($email)->send(new BookEmail($orders, $stripeData, $values, $invoice, $invoice_content, $flag));
-
+           Mail::to(['info@vibeadventures.com', 'marketing@vibeadventure.com'])->send(new BookEmail($orders, $stripeData, $values, $invoice, $invoice_content, $flag, 'admin.booking_details'));
+       
            return ApiResponse::success('Email sent successfully');
         } catch (Exception $e) {
             Log::error("Error in emailBConfirmation: " . $e->getMessage());
