@@ -14,7 +14,8 @@ http {
     keepalive_timeout  65;
 
     server {
-        listen ${PORT} default_server;
+        # bind on all interfaces explicitly and use the PORT variable substituted at container start
+        listen 0.0.0.0:${PORT} default_server;
         server_name _;
 
         root /var/www/html/public;

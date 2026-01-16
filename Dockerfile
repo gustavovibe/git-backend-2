@@ -41,7 +41,7 @@ RUN chmod +x /start.sh
 
 # Ensure proper permissions (adjust as needed)
 RUN chown -R www-data:www-data /var/www/html && \
-    chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache || true
+    chmod -R 755 /var/www/html /var/www/html/bootstrap/cache || true
 
 # Expose and set default PORT env
 ENV PORT=8080
