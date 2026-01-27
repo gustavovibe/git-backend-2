@@ -5,9 +5,11 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Http\Request;
 use App\Http\Controllers\StripeController;
 use App\Http\Controllers\TourController;
 use App\Http\Controllers\TourradarController;
+use App\Models\Attempt;
 use App\Models\Order;
 
 class ProcessPendingAttempts extends Command
@@ -27,7 +29,7 @@ class ProcessPendingAttempts extends Command
 
     public function processPendingAttempts()
     {
-        $pendingAttempts = DB::table('attempts')
+        $pendingAttempts = Attempt::query()
             ->where('status', 'pending')
             ->where('expiration', '>=', now())
             ->get();
@@ -39,7 +41,7 @@ class ProcessPendingAttempts extends Command
             $paymentIntent = $attempt->payment_id;
             $tBookingId = data_get($attempt->tourradar_res, 'id');
             Log::info('automatic Processing attempt ID: ' . $attempt->id. 'expiration: ' . $attempt->expiration );
-            $ResponseTour = json_decode($attempt->tourradar_res, true);
+            $ResponseTour = $attempt->tourradar_res;
             Log::info('automatic Processing booking ID: ' . $tBookingId);
             try {
                 // Check if the order exists in the database
@@ -70,7 +72,7 @@ class ProcessPendingAttempts extends Command
                 }
             }
             Log::info("Final statusResponse before checking condition: '" . $statusResponse . "'");
-            $flight = json_decode($attempt->duffel_res, true);
+            $flight = $attempt->duffel_res;
             $orderId = json_decode($attempt->order_id, true);
             Log::info('automatic Flight Data: ' . json_encode($flight));
             if (isset($flightResponse['errors']) && $flightResponse['errors']) {
@@ -107,7 +109,7 @@ class ProcessPendingAttempts extends Command
                         }
 
                 // Update the attempt status to confirmed
-                DB::table('attempts')->where('id', $attempt->id)->update(['status' => 'confirmed']);
+                $attempt->update(['status' => 'confirmed']);
                 $mailResponse = TourController::emailBConfirmation($bookingId, $duffelId, $paymentId, $RequestPassengers);
                 Log::info('automatic mail sent ' . $mailResponse . ' confirmed.');
                 Log::info('automatic duffel order ID ' . $orderId . ' confirmed.');
@@ -115,13 +117,14 @@ class ProcessPendingAttempts extends Command
         }
 
 
-        $expiredAttempts = DB::table('attempts')
+        $expiredAttempts = Attempt::query()
             ->where('status', 'pending')
             ->where('expiration', '<', now())
             ->get();
   
         foreach ($expiredAttempts as $attempt) {
             Log::info('automatic Processing expired attempt ID: ' . $attempt->id . 'expiration: ' . $attempt->expiration);
+            $bookingId = $attempt->booking_id;
             $paymentIntent = $attempt->payment_id;
             if(!$paymentIntent){
                 Log::error('No payment intent found in attempt');
@@ -136,14 +139,34 @@ class ProcessPendingAttempts extends Command
                     $stripeResponse = StripeController::cancellPayment($paymentIntent);
                     
                     Log::info('automatic Stripe cancell payment for payment ID ' . $paymentIntent . ': ' . json_encode($stripeResponse));
-                    DB::table('attempts')->where('id', $attempt->id)->update(['status' => 'failed']);
-                    $mailResponse = TourController::bookingCancellation($bookingId);
+                    $attempt->update(['status' => 'failed']);
+                    $order = Order::find($bookingId);
+                    $email = $order?->user?->email;
+                    if (!$email) {
+                        Log::error('No email found for booking ID: ' . $bookingId);
+                        continue;
+                    }
+                    $mailRequest = Request::create('/booking-cancellation', 'GET', [
+                        'booking_id' => $bookingId,
+                        'email' => $email,
+                    ]);
+                    $mailResponse = app(TourController::class)->bookingCancellation($mailRequest);
                     Log::info('automatic mail sent ' . $mailResponse . ' cancelled.');
                     Log::info('automatic attempt failed (expired): ' . $attempt->id );
                 } else {
-                    DB::table('attempts')->where('id', $attempt->id)->update(['status' => 'failed']);
+                    $attempt->update(['status' => 'failed']);
                     Log::info('automatic attempt already cancelled in stripe: ' . $attempt->id );
-                    $mailResponse = TourController::bookingCancellation($bookingId);
+                    $order = Order::find($bookingId);
+                    $email = $order?->user?->email;
+                    if (!$email) {
+                        Log::error('No email found for booking ID: ' . $bookingId);
+                        continue;
+                    }
+                    $mailRequest = Request::create('/booking-cancellation', 'GET', [
+                        'booking_id' => $bookingId,
+                        'email' => $email,
+                    ]);
+                    $mailResponse = app(TourController::class)->bookingCancellation($mailRequest);
                     Log::info('automatic mail sent ' . $mailResponse . ' cancelled.');
                 }
             } catch (\Exception $e) {
