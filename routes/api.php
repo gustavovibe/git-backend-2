@@ -4,6 +4,7 @@ use App\Http\Controllers\ActionLogController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DestinationController;
 use App\Http\Controllers\StripeController;
+use App\Http\Controllers\SyncController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Citycontroller;
 use App\Http\Controllers\CountryController;
@@ -215,6 +216,9 @@ Route::get('duffel-cancel-check',[DuffelApiController::class, 'flightCancel']);
 Route::post('duffel-cancel-confirm',[DuffelApiController::class, 'confirmCancel']);
 
 Route::post('/checkout', [NewPackageController::class, 'checkoutWebhook']);
+
+Route::get('/sync/page/{page}', [SyncController::class, 'syncPage']);
+Route::get('/sync/pages', [SyncController::class, 'syncPages']);
 
 Route::get('/logs', function () {
     // Path to the Laravel log file
